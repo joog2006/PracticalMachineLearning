@@ -1,0 +1,76 @@
+---
+title: 'Practical Machine Learning: Final Project'
+author: "joog2006"
+date: "Sunday, October 25, 2015"
+output: html_document
+---
+##Summary
+Data from the Weight Lifting Exercise experiment from the Human Activity Recognition (http://groupware.les.inf.puc-rio.br/har) site is used to predict the quality of a weight lifting rep. Correct lifts are classified as "A." A random forest model is constructed with accurate out of sample predictions.
+
+```{r, echo=FALSE}
+library(caret)
+library(corrplot)
+library(ggplot2)
+library(rattle)
+
+trainData <- read.csv('pml-training.csv')
+
+keepVars <- c('classe','accel_arm_x','accel_arm_y','accel_arm_z','accel_belt_x','accel_belt_y','accel_belt_z','accel_dumbbell_x','accel_dumbbell_y','accel_dumbbell_z','accel_forearm_x','accel_forearm_y','accel_forearm_z')
+gyroVars <- c('gyros_arm_x','gyros_arm_y','gyros_arm_z','gyros_belt_x','gyros_belt_y','gyros_belt_z','gyros_dumbbell_x','gyros_dumbbell_y','gyros_dumbbell_z','gyros_forearm_x','gyros_forearm_y','gyros_forearm_z')
+magnetVars <- c('magnet_arm_x','magnet_arm_y','magnet_arm_z','magnet_belt_x','magnet_belt_y','magnet_belt_z','magnet_dumbbell_x','magnet_dumbbell_y','magnet_dumbbell_z','magnet_forearm_x','magnet_forearm_y','magnet_forearm_z')
+
+subTrain <- trainData[,rbind(keepVars, gyroVars,magnetVars)]
+
+set.seed(34234)
+inTrain <- createDataPartition(y=subTrain$classe,
+                               p=0.7, list=FALSE)
+training <- subTrain[inTrain,]
+testing <- subTrain[-inTrain,]
+
+TreeModel <- train(classe~.,data=training,method="rpart")
+rfModel<-train(classe~.,data=training,method="rf",
+                trControl=trainControl(method="cv",number=5),
+                prox=TRUE,allowParallel=TRUE)
+
+pRF = predict(rfModel, testing)
+
+fancyRpartPlot(TreeModel$finalModel,main="Tree from Random Forest", sub="")
+
+corrTrain <- subset(training, select=-c(classe))
+corMat <- cor(corrTrain)
+```
+
+##Exploratory Analysis
+Exploratory data analysis shows that the predictor data generally have low correlations with each other. This opens the door for linear estimation methods with only a minmal need for principal components analysis to reduce dimensionality.
+
+####Figure 1: Correlation plot of prediction variables
+```{r, echo=FALSE}
+library('corrplot')
+corrplot(corMat)
+```
+
+##Random Forest Model
+A random forest model is constructed with all of the magnet, accelerameter, and gyroscopic values used as predictors for the random forest. Cross validation is used through the "trainControl" feature of the caret package. Five resamplings are conducted.
+
+```{r}
+rfModel$finalModel
+```
+
+The results have an out of sample error rate of 1.27% which is well in the acceptable range, beating a rule of thumb accuracy rate of .95.
+
+An example of a tree from the random forest.
+####Figure 2: Example of Tree from Random forest
+```{r, echo=FALSE}
+fancyRpartPlot(TreeModel$finalModel,main="Tree from Random Forest", sub="")
+```
+
+##Out of sample validation
+The orginal dataset was split 30/70 into training/testing datasets. Internal cross validation was used in creating the random forest, but the testing dataset can be used for further validation.
+
+####Figure 3: Confusion Matrix for Random Forest Prediction of Test Data 
+```{r, echo=FALSE}
+confusionMatrix(pRF, testing$classe)
+```
+
+##Conclusion
+The out of sample error rate and cross validation in creating the Random Forest imply that this model should perform very well in a real world test to identify rep performance giving sensor data. Moreover, the sensitivity and specificity rates for classifying "A" are very high, so distinguishing between correct and incorrect reps should be even stronger than precisely determining the type of error (classified B, C, D, E).
